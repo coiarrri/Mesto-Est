@@ -2,11 +2,12 @@ import json
 from datetime import timedelta
 
 from django.db.models import F, Sum
-from django.http import JsonResponse
-from django.shortcuts import get_object_or_404
+from django.http import JsonResponse, HttpResponseNotFound
+from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
+from django.template.loader import render_to_string
 
 from .models import ParkingSpot, SpotObservation, SpotHourStat
 
@@ -14,6 +15,10 @@ DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 
 WINDOW_DAYS = 56
 MIN_SAMPLES = 5
+
+def index(request):
+    return render(request, 'layout.html')
+
 
 
 def percent(total, free):
@@ -93,3 +98,8 @@ def spot_heatmap(request, code):
     return JsonResponse({"code": code, "days": DAYS,
                          "hours": list(range(24)), "matrix": matrix,
                          "window_days": WINDOW_DAYS})
+
+
+
+def page_not_found(request, exception):
+    return HttpResponseNotFound("<h1>Страница не найдена</h1>") #обработчик 404

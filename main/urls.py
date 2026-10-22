@@ -8,5 +8,6 @@ urlpatterns = [
     path("api/spots/<str:code>/status/", views.set_status),
     path("api/spots/<str:code>/heatmap/", views.spot_heatmap),
     path("map/", TemplateView.as_view(template_name="main/map.html")),
+    path('', views.index)
 ]
 
