@@ -1,0 +1,27 @@
+<!doctype html>
+{% load static %}
+<html lang="ru" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Место есть</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'css/mesto.css' %}">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="wm"><i aria-hidden="true"></i>место есть</div>
+    <div class="right"><button type="button" class="editbtn" data-a="edit" hidden>Разметка</button><div class="themeseg" id="themeseg" role="group" aria-label="Вариант оформления"></div><div class="badge">демо-данные</div></div>
+  </header>
+  <main id="main"></main>
+  <nav class="nav" role="tablist" aria-label="Разделы" id="nav"></nav>
+</div>
+<div id="modal" class="modal" hidden><div class="msheet" role="dialog" aria-modal="true" id="msheet"></div></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="{% static 'js/mesto-data.js' %}"></script>
+<script src="{% static 'js/mesto-app.js' %}"></script>
+</body>
+</html>
