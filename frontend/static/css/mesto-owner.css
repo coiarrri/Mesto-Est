@@ -1,0 +1,27 @@
+/* Блок «владелец места». Подключается после mesto.css */
+.owncard{padding:16px}
+.ownhd{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.ownhd .lbl{display:flex;align-items:center;gap:7px;margin-bottom:2px}
+.ownst{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:12px 0 4px}
+.ownloc{margin-top:10px}
+.ownloc select{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236A6E65' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:38px}
+.ownloc input:disabled,.ownloc select:disabled{opacity:.7}
+input[type=text]:not(.sw){}
+.slots{display:grid;gap:8px;margin-top:12px}
+.slot{display:flex;align-items:center;gap:12px;background:var(--bg);border:1px dashed var(--ink2);border-radius:18px;padding:11px 12px}
+.slot.has{border-style:solid;border-color:var(--line)}
+.sico{width:38px;height:38px;border-radius:12px;background:var(--surface);display:grid;place-items:center;flex:none}
+.slot.has .sico{background:var(--lime)}
+.sbody{flex:1;min-width:0;display:grid;gap:1px}
+.sbody b{font-size:14.5px;font-weight:600;letter-spacing:-.015em}
+.sbody span{overflow:hidden;text-overflow:ellipsis}
+.slot:not(.has) .sbody span{white-space:normal;font-size:12.5px;line-height:1.3}
+.slot.has .sbody span{white-space:nowrap}
+.filebtn{position:relative;display:inline-flex;align-items:center;gap:6px;border:0;border-radius:99px;background:var(--btn-bg);color:var(--btn-fg);min-height:40px;padding:0 15px;font-size:14px;font-weight:600;cursor:pointer;flex:none;overflow:hidden}
+.filebtn.sm2{background:var(--surface);color:var(--ink);border:1px solid var(--line);font-weight:500;min-height:36px;padding:0 12px}
+.filebtn input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:0}
+.filebtn:focus-within{outline:2.5px solid var(--ink);outline-offset:2px}
+.chip.sm2{min-height:36px;padding:0 10px;display:inline-grid;place-items:center}
+.demobox{margin-top:12px;border:1px dashed var(--ink2);border-radius:16px;padding:10px 12px;display:grid;gap:8px}
+@media (max-width:400px){ .slot{flex-wrap:wrap} .slot .sbody{flex-basis:calc(100% - 52px)} }
+.card .owncard{background:var(--bg)}
