@@ -4,7 +4,7 @@
 var MAP = {};
 function mapCall(name){ var f = MAP[name]; return f ? f.apply(null, [].slice.call(arguments, 1)) : undefined; }
 function mapAttachOrPlaceholder(){
-  if(MAP.attach){ MAP.attach(); return; }
+  if(MAP.attach){ try { MAP.attach(); return; } catch(err){ if(window.console) console.warn('[map]', err); } }   /* карта не загрузилась: показываем заглушку, остальное работает */
   var slot = $('#mapslot');
   if(slot) slot.innerHTML = '<div class="mapph"><div><b>Здесь будет карта района</b><span>Карту подключаем отдельным файлом. Остальное работает</span></div></div>';
 }
@@ -13,6 +13,13 @@ function mapAttachOrPlaceholder(){
   var bump = function(h,mu,s,a){ return a * Math.exp(-Math.pow((h-mu)/s, 2)); };
   var pad = function(n){ return (n < 10 ? '0' : '') + n; };
   var A = function(a,v){ return ' data-a="'+a+'"' + (v !== undefined ? ' data-v="'+v+'"' : ''); };
+  /* всё, что ввёл пользователь, перед вставкой в HTML проходит через esc() */
+  var esc = function(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  /* блок владельца живёт в mesto-owner.js; если файла нет, приложение работает без него */
+  /* приложение сообщает о своих действиях событиями, их слушает mesto-api.js */
+  function emit(n, d){ try { document.dispatchEvent(new CustomEvent('mesto:' + n, {detail:d})); } catch(err){} }
+  function live(a){ return typeof API !== 'undefined' && API.on(a); }
+  function ownCall(name, def){ return (typeof OWN !== 'undefined' && OWN[name]) ? OWN[name].apply(null, [].slice.call(arguments, 2)) : def; }
   var PROFILE = {
     home:function(d,h){ return d==='wd' ? 0.35+bump(h,21,3.5,0.55)+bump(h,6.5,2,0.15)-bump(h,13,3,0.2) : 0.55+bump(h,15,6,0.15)+bump(h,22,3,0.2); },
     park:function(d,h){ return d==='wd' ? 0.25+bump(h,18,3,0.4) : 0.3+bump(h,14,4,0.55); },
@@ -56,7 +63,11 @@ function mapAttachOrPlaceholder(){
     state.marks.forEach(function(m){ if(m.zone !== z.id || m.day !== t.day) return; s += Math.exp(-Math.abs(t.hour - m.hour) * 60 / 30) * (m.kind === 'busy' ? -0.2 : 0.2); });
     return s;
   }
-  function frac(z,t){ t = t || T(); return clamp(1 - load(z,t) + shift(z,t), 0.02, 0.98); }
+  function frac(z,t){
+    t = t || T();
+    var u = z.usual && z.usual[t.day] && z.usual[t.day][t.hour], base = (u != null) ? u/100 : 1 - load(z,t);   /* z.usual приходит из /api/zones/ */
+    return clamp(base + shift(z,t), 0.02, 0.98);
+  }
   function freeEst(z,t){ return Math.max(0, Math.round(z.spots * frac(z,t))); }
   function pct(z,t){ return Math.round(frac(z,t)*100); }
   function level(z){ var c = frac(z); return c >= 0.6 ? 'hi' : (c >= 0.35 ? 'mid' : 'lo'); }
@@ -68,7 +79,7 @@ function mapAttachOrPlaceholder(){
   function money(v){ return fmtP(Math.round(v*100)/100) + ' руб.'; }
   function parseP(s){ var v = parseFloat(String(s).replace(',', '.')); return (isFinite(v) && v > 0) ? Math.round(v*100)/100 : NaN; }
   function parkName(l){ var z = zone(l.zone); return z ? z.name : 'Парковка'; }
-  function fullName(u){ return u.surname + ' ' + u.name + (u.patr ? ' ' + u.patr : ''); }
+  function fullName(u){ return esc(u.surname + ' ' + u.name + (u.patr ? ' ' + u.patr : '')); }
   function maskId(s){ return s ? s.slice(0,3) + '•••••••••' + s.slice(-2) : 'не указан'; }
   function needPassport(msg){ state.gate = msg; state.tab = 'account'; render(true); toast('Добавьте паспортные данные'); }
 
@@ -163,8 +174,8 @@ function mapAttachOrPlaceholder(){
     return '<article class="l-card"><div class="l-head"><div><div class="l-title">'+l.title+'</div><div class="muted sm">'+parkName(l)+' · '+l.walk+' мин пешком</div></div>' +
       (preview ? '' : '<button type="button" class="round"'+A('book',l.id)+' aria-label="Забронировать: '+l.title+'">'+ic('arrow')+'</button>') + '</div>' +
       '<div><div class="price">'+p[0]+(p[1]?'<small>'+p[1]+'</small>':'')+'</div>'+(alt?'<div class="alt">'+alt+'</div>':'')+'</div>' +
-      '<div class="facts"><span class="fact">'+ic('cal')+l.whenText+'</span><span class="fact">'+ic('user')+l.owner+(l.rating?' · '+l.rating:'')+'</span>' +
-      (l.ev?'<span class="fact lime">'+ic('bolt')+'Зарядка</span>':'')+(l.mine&&!preview?'<span class="fact lime">Ваше</span>':'')+'</div></article>';
+      '<div class="facts"><span class="fact">'+ic('cal')+l.whenText+'</span><span class="fact">'+ic('user')+esc(l.owner)+(l.rating?' · '+l.rating:'')+'</span>' +
+      (l.ev?'<span class="fact lime">'+ic('bolt')+'Зарядка</span>':'')+(l.mine&&!preview?'<span class="fact lime">Ваше</span>':'')+ownCall('badge','',l)+'</div></article>';
   }
   function rentView(){
     var items = allListings().filter(function(l){
@@ -208,7 +219,7 @@ function mapAttachOrPlaceholder(){
     return h + '</div></div>';
   }
   function priceField(key, label, id){
-    return '<div class="field" style="margin-bottom:12px"><label class="lbl" for="'+id+'" style="font-weight:500;font-size:14px">'+label+'</label><div class="inp"><input id="'+id+'" type="text" inputmode="decimal" autocomplete="off" value="'+offer[key]+'" placeholder="0,00"><span>руб.</span></div></div>';
+    return '<div class="field" style="margin-bottom:12px"><label class="lbl" for="'+id+'" style="font-weight:500;font-size:14px">'+label+'</label><div class="inp"><input id="'+id+'" type="text" inputmode="decimal" autocomplete="off" value="'+esc(offer[key])+'" placeholder="0,00"><span>руб.</span></div></div>';
   }
   function previewListing(){
     var o = offer, l = {id:'prev', title:o.ev?'Место с зарядкой':'Крытое место', zone:o.zone, owner:state.user?state.user.name:'Вы', rating:'', whenText:rangeText() || 'выберите даты', avail:[], walk:3, cov:true, ev:o.ev, mine:true}, ok = false, v;
@@ -231,37 +242,47 @@ function mapAttachOrPlaceholder(){
       '<div class="field"><div class="lbl">3. Как сдаёте</div><div class="chips wrap">'+fmt('free','Бесплатно')+fmt('hour','Почасово')+fmt('day','Посуточно')+fmt('month','Помесячно')+'</div>' +
       (o.hour?priceField('hp','Цена за час','of-hp'):'') + (o.day?priceField('dp','Цена за сутки','of-dp'):'') + (o.month?priceField('mp','Цена за месяц','of-mp'):'') +
       '<p class="sm muted">Копейки можно: 5,60 или 5.6.</p></div>' +
-      '<div class="field" style="margin-bottom:0"><div class="lbl">4. Детали</div><input id="of-num" type="text" inputmode="numeric" placeholder="Номер места, виден только после брони" value="'+o.num+'" aria-label="Номер места"><label class="opt"><input type="checkbox" class="sw" id="of-ev"'+(o.ev?' checked':'')+'><span>Есть зарядка для электромобиля</span></label></div></section>' +
+      '<div class="field" style="margin-bottom:0"><div class="lbl">4. Детали</div><input id="of-num" type="text" inputmode="numeric" placeholder="Номер места, виден только после брони" value="'+esc(o.num)+'" aria-label="Номер места"><label class="opt"><input type="checkbox" class="sw" id="of-ev"'+(o.ev?' checked':'')+'><span>Есть зарядка для электромобиля</span></label></div></section>' +
       '<div class="lbl" style="margin:4px 4px 8px">Так увидят ваше место</div><div id="prev">'+previewHtml()+'</div>' +
       '<section class="card"><div class="lbl" style="margin-bottom:10px">Как оформляется сделка</div><ol class="steps"><li>Гость отправляет запрос и принимает условия.</li><li>Вы подтверждаете запрос в приложении.</li><li>Договор формируется сам из данных обеих сторон и принимается онлайн. Бумаги не нужны.</li></ol></section>' +
-      '<label class="opt" style="margin-bottom:4px"><input type="checkbox" class="ck" id="of-own"'+(o.own?' checked':'')+'><span>Я владелец места или имею право им распоряжаться</span></label>' +
+      ownCall('gate','') +
       '<label class="opt" style="margin-bottom:12px"><input type="checkbox" class="ck" id="of-terms"'+(o.terms?' checked':'')+'><span>Принимаю <button type="button" class="linkbtn"'+A('doc','terms')+'>соглашение</button> и <button type="button" class="linkbtn"'+A('doc','offer')+'>оферту</button> сервиса</span></label>' +
       '<button type="button" class="cta"'+A('publish')+'>Опубликовать</button>';
   }
 
   /* ---------- аккаунт ---------- */
+  function authSwitch(){
+    var m = state.authMode === 'login' ? 'login' : 'new';
+    return '<div class="chips" role="group" aria-label="Вход или регистрация"><button type="button" class="chip"'+A('authmode','new')+' aria-pressed="'+(m==='new')+'">Новый аккаунт</button><button type="button" class="chip"'+A('authmode','login')+' aria-pressed="'+(m==='login')+'">Уже есть аккаунт</button></div>';
+  }
+  function loginCard(){
+    return '<section class="card"><div class="field"><label class="lbl" for="lg-e">Электронная почта</label><input id="lg-e" type="text" inputmode="email" placeholder="name@mail.by" autocomplete="username"></div>' +
+      '<div class="field"><label class="lbl" for="lg-w">Пароль</label><input id="lg-w" type="password" autocomplete="current-password"></div>' +
+      '<button type="button" class="cta"'+A('login')+'>Войти</button>' + (live('auth') ? '' : '<p class="hint">Демо: данные живут, пока открыта страница, поэтому входа по паролю пока нет.</p>') + '</section>';
+  }
   function accountView(){
     var docs = '<section class="card"><div class="lbl" style="margin-bottom:10px">Документы</div><div class="chips wrap"><button type="button" class="chip"'+A('doc','terms')+'>Соглашение</button><button type="button" class="chip"'+A('doc','offer')+'>Оферта</button><button type="button" class="chip"'+A('doc','privacy')+'>Политика данных</button><button type="button" class="chip"'+A('doc','contract')+'>Шаблон договора</button></div></section>';
     if(!state.user){
       return '<h1 class="h1">Аккаунт</h1>' + (state.gate ? '<div class="card" style="background:var(--lime-tint);border-color:transparent"><b>'+state.gate+'</b></div>' : '') +
         '<section class="card"><div class="lbl">Вы гость</div><p class="muted sm" style="margin-top:6px">Смотреть карту и отмечать места можно без регистрации. Аккаунт нужен, чтобы бронировать и сдавать места: договор заключается между конкретными людьми.</p></section>' +
-        '<section class="card"><div class="field"><label class="lbl" for="ac-s">Фамилия</label><input id="ac-s" type="text" autocomplete="family-name"></div>' +
+        authSwitch() + (state.authMode === 'login' ? loginCard() : '<section class="card"><div class="field"><label class="lbl" for="ac-s">Фамилия</label><input id="ac-s" type="text" autocomplete="family-name"></div>' +
         '<div class="two"><div class="field"><label class="lbl" for="ac-n">Имя</label><input id="ac-n" type="text" autocomplete="given-name"></div><div class="field"><label class="lbl" for="ac-o">Отчество</label><input id="ac-o" type="text" autocomplete="additional-name"></div></div>' +
         '<div class="field"><label class="lbl" for="ac-p">Телефон</label><input id="ac-p" type="tel" placeholder="+375" autocomplete="tel"></div>' +
         '<div class="field"><label class="lbl" for="ac-e">Электронная почта</label><input id="ac-e" type="text" inputmode="email" placeholder="name@mail.by" autocomplete="email"></div>' +
         '<div class="field"><label class="lbl" for="ac-w">Пароль</label><input id="ac-w" type="password" placeholder="От 6 знаков" autocomplete="new-password"></div>' +
-        '<div class="note"><b>Код из SMS или письма пока не отправляем.</b> Рассылка кодов платная, поэтому на первом этапе вход без подтверждения. Подтверждение номера и почты подключим на втором этапе, когда будет бюджет.</div>' +
-        '<button type="button" class="cta"'+A('signup')+'>Создать аккаунт</button><p class="hint">Паспортные данные попросим позже, перед первой бронью или сдачей места. Прототип: данные никуда не отправляются.</p></section>' + docs;
+        ownCall('card','','signup') + '<div class="note"><b>Код из SMS или письма пока не отправляем.</b> Рассылка кодов платная, поэтому на первом этапе вход без подтверждения. Подтверждение номера и почты подключим на втором этапе, когда будет бюджет.</div>' +
+        '<button type="button" class="cta"'+A('signup')+'>Создать аккаунт</button><p class="hint">Паспортные данные попросим позже, перед первой бронью или сдачей места. Прототип: данные никуда не отправляются.</p></section>') + docs;
     }
-    var reqs = state.bookings.filter(function(b){ return b.status === 'request'; }), u = state.user;
+    var reqs = (live('bookings') ? (state.incoming || []) : state.bookings).filter(function(b){ return b.status === 'request'; }), u = state.user;
     return '<h1 class="h1">Аккаунт</h1>' +
-      '<section class="card" style="display:flex;gap:14px;align-items:center"><div class="avatar">'+u.name.charAt(0).toUpperCase()+'</div><div style="flex:1;min-width:0"><div class="lbl" style="font-size:18px">'+fullName(u)+'</div><div class="muted sm">'+u.phone+' · '+u.email+'</div></div><button type="button" class="chip"'+A('logout')+'>Выйти</button></section>' +
+      '<section class="card" style="display:flex;gap:14px;align-items:center"><div class="avatar">'+esc(u.name.charAt(0).toUpperCase())+'</div><div style="flex:1;min-width:0"><div class="lbl" style="font-size:18px">'+fullName(u)+'</div><div class="muted sm">'+esc(u.phone)+' · '+esc(u.email)+'</div></div><button type="button" class="chip"'+A('logout')+'>Выйти</button></section>' +
       (state.gate ? '<div class="card" style="background:var(--lime-tint);border-color:transparent"><b>'+state.gate+'</b></div>' : '') +
       (u.pid ? '<div class="note" style="margin-top:0">Личность указана: ИН '+maskId(u.pid)+', паспорт '+u.passport+'</div>' :
         '<section class="card"><div class="lbl">Добавьте паспортные данные</div><p class="muted sm" style="margin:6px 0 12px">Нужно один раз, перед первой бронью или публикацией места. Они подставляются в договор. Другая сторона видит только ваше имя.</p>' +
         '<div class="field"><label class="lbl" for="pp-i">Идентификационный номер</label><input id="pp-i" type="text" placeholder="3010190A001PB1" maxlength="14" autocapitalize="characters" autocomplete="off"></div>' +
         '<div class="field"><label class="lbl" for="pp-n">Серия и номер паспорта</label><input id="pp-n" type="text" placeholder="MP1234567" maxlength="9" autocapitalize="characters" autocomplete="off"></div>' +
         '<button type="button" class="cta"'+A('passport')+'>Сохранить</button><p class="hint">Хранить будем в зашифрованном виде. Проверка по базе (например, через МСИ) появится на втором этапе.</p></section>') +
+      ownCall('card','','account') +
       '<div class="two" style="margin-bottom:12px"><div class="tile"><b>'+state.helped+'</b><span class="muted sm">отметок вы сделали</span></div><div class="tile"><b>'+state.mine.length+'</b><span class="muted sm">мест вы сдаёте</span></div></div>' +
       '<section class="card"><div class="lbl" style="margin-bottom:8px">Мои брони</div>' + (state.bookings.length ? state.bookings.map(function(b){
         var l = listing(b.listing);
@@ -284,7 +305,7 @@ function mapAttachOrPlaceholder(){
     bk.qty = clamp(bk.qty, 1, maxq);
     var total = bk.fmt==='free' ? 0 : bk.fmt==='hour' ? l.hour*bk.qty : bk.fmt==='day' ? l.day*bk.qty : l.month*bk.qty;
     bk.total = total;
-    return '<div class="l-title" style="font-size:22px">'+l.title+'</div><p class="muted sm" style="margin:2px 0 14px">'+parkName(l)+' · '+l.owner+' · доступно: '+l.whenText+'</p>' +
+    return '<div class="l-title" style="font-size:22px">'+l.title+'</div><p class="muted sm" style="margin:2px 0 14px">'+parkName(l)+' · '+esc(l.owner)+' · доступно: '+l.whenText+'</p>' +
       '<div class="chips wrap" style="margin-bottom:12px">'+fm.map(function(f){ return '<button type="button" class="chip"'+A('bf',f[0])+' aria-pressed="'+(bk.fmt===f[0])+'">'+f[1]+'</button>'; }).join('')+'</div>' +
       '<div class="two" style="margin-bottom:12px"><div><label class="sm muted" for="bk-d">Дата</label><input id="bk-d" type="date" min="'+ymd(new Date())+'" value="'+bk.date+'"></div><div><label class="sm muted" for="bk-t">Начало</label><input id="bk-t" type="time" value="'+bk.time+'"></div></div>' +
       (bk.fmt==='month' ? '' : '<div class="num" style="margin-bottom:6px"><span class="nm">'+(bk.fmt==='hour'?'Сколько часов':'Сколько суток')+'</span><div class="step"><button type="button"'+A('bq','-1')+' aria-label="Меньше">−</button><b>'+bk.qty+'</b><button type="button"'+A('bq','1')+' aria-label="Больше">+</button></div></div>') +
@@ -296,7 +317,7 @@ function mapAttachOrPlaceholder(){
   function agreementHtml(b){
     var l = listing(b.listing), u = state.user;
     return '<div class="l-title" style="font-size:22px;margin-bottom:12px">Договор</div><div class="doc">' +
-      '<p><b>Стороны.</b> Владелец: '+l.owner+'. Пользователь: '+fullName(u)+', ИН '+maskId(u.pid)+'.</p>' +
+      '<p><b>Стороны.</b> Владелец: '+esc(l.owner)+'. Пользователь: '+fullName(u)+', ИН '+maskId(u.pid)+'.</p>' +
       '<p><b>Предмет.</b> Предоставление машино-места: '+l.title+', '+parkName(l)+'.</p>' +
       '<p><b>Срок.</b> '+b.when+', '+b.qtyText+'. <b>Цена.</b> '+(b.total?money(b.total):'бесплатно')+'</p>' +
       '<p><b>Правила.</b> Один автомобиль, правила паркинга и ТС, фото состояния места при въезде и выезде.</p>' +
@@ -351,8 +372,8 @@ function mapAttachOrPlaceholder(){
       case 'theme': state.theme = v; document.documentElement.setAttribute('data-theme', v); themeSeg(); break;
       case 'mark':
         var nw = realNow(), m = {zone:state.sel, kind:v, hour:nw.hour, day:nw.day, time:nw.time};
-        state.marks.push(m); state.last = m; state.helped += 1; toast('Отмечено в '+m.time+'. Увидят соседи'); render(); break;
-      case 'undo': i = state.marks.indexOf(state.last); if(i >= 0){ state.marks.splice(i,1); state.helped = Math.max(0, state.helped-1); } state.last = null; toast('Отметка отменена'); render(); break;
+        state.marks.push(m); state.last = m; state.helped += 1; emit('mark', {mark:m, gps:state.gps}); toast('Отмечено в '+m.time+'. Увидят соседи'); render(); break;
+      case 'undo': emit('unmark', {mark:state.last}); i = state.marks.indexOf(state.last); if(i >= 0){ state.marks.splice(i,1); state.helped = Math.max(0, state.helped-1); } state.last = null; toast('Отметка отменена'); render(); break;
       case 'gorent': state.zoneFilter = v; state.tab = 'rent'; render(true); break;
       case 'evrent': state.fEv = true; state.zoneFilter = ''; state.tab = 'rent'; render(true); break;
       case 'when': state.when = v; render(); break;
@@ -371,11 +392,13 @@ function mapAttachOrPlaceholder(){
         if(!$('#bk-ok').checked){ toast('Подтвердите согласие с условиями'); break; }
         if(!bk.date){ toast('Выберите дату'); break; }
         var qt = bk.fmt==='month' ? '1 мес.' : bk.qty+' '+(bk.fmt==='hour'?'ч':'сут.');
-        state.bookings.unshift({id:'b'+(state.nextId++), listing:bk.id, fmt:bk.fmt, qty:bk.qty, qtyText:qt, when:fmtD(bk.date)+', с '+bk.time, total:bk.total, status:'request', createdAt:stamp()});
+        var nb = {id:'b'+(state.nextId++), listing:bk.id, fmt:bk.fmt, qty:bk.qty, qtyText:qt, when:fmtD(bk.date)+', с '+bk.time, total:bk.total, status:'request', createdAt:stamp()};
+        state.bookings.unshift(nb); emit('book', {booking:nb, fmt:bk.fmt, qty:bk.qty, date:bk.date, time:bk.time});
         closeModal(); state.tab = 'rent'; render(true); toast('Запрос отправлен владельцу'); break;
       case 'ans':
         var p = v.split(':');
-        state.bookings.forEach(function(b){ if(b.id === p[1]){ b.status = p[0] === 'ok' ? 'confirmed' : 'declined'; if(p[0] === 'ok') b.acceptedAt = stamp(); } });
+        emit('answer', {id:p[1], ok:p[0] === 'ok'});
+        state.bookings.concat(state.incoming || []).forEach(function(b){ if(b.id === p[1]){ b.status = p[0] === 'ok' ? 'confirmed' : 'declined'; if(p[0] === 'ok') b.acceptedAt = stamp(); } });
         render(); toast(p[0]==='ok' ? 'Подтверждено. Договор принят обеими сторонами' : 'Запрос отклонён'); break;
       case 'agree': openModal(agreementHtml(state.bookings.filter(function(x){ return x.id === v; })[0])); break;
       case 'fmt': syncText(); offer[v] = !offer[v]; render(); break;
@@ -392,25 +415,32 @@ function mapAttachOrPlaceholder(){
         var pv = previewListing();
         if(!state.user){ needAccount('Чтобы сдать место, войдите в аккаунт'); break; }
         if(!state.user.pid){ needPassport('Чтобы сдавать место, добавьте паспортные данные: они нужны для договора'); break; }
+        if(!ownCall('canPublish', true)){ toast('Сначала подтвердите, что вы владелец места'); ownCall('go'); break; }
         if(!offer.from){ toast('Выберите даты, когда место свободно'); break; }
         if(!pv){ toast('Выберите формат и введите цену'); break; }
         if(!offer.num.trim()){ toast('Укажите номер места'); break; }
-        if(!offer.own || !offer.terms){ toast('Отметьте право на место и согласие с условиями'); break; }
+        if(!offer.terms){ toast('Примите соглашение и оферту'); break; }
         var l = {id:'m'+(state.nextId++), mine:true, title:pv.title, zone:offer.zone, owner:state.user.name, rating:'', whenText:rangeText(), avail:[], walk:3, cov:true, ev:offer.ev};
         if(pv.free) l.free = true; if(pv.hour) l.hour = pv.hour; if(pv.day) l.day = pv.day; if(pv.month) l.month = pv.month;
-        state.mine.unshift(l); offer.num = ''; offer.own = false; offer.terms = false; offer.from = null; offer.to = null; state.tab = 'rent'; render(true); toast('Место опубликовано'); break;
+        state.mine.unshift(l); emit('publish', {listing:l, offer:{zone:offer.zone, from:offer.from, to:offer.to, allDay:offer.allDay, t1:offer.t1, t2:offer.t2, free:offer.free, hour:offer.hour, day:offer.day, month:offer.month, hp:offer.hp, dp:offer.dp, mp:offer.mp, ev:offer.ev, num:offer.num}}); offer.num = ''; offer.own = false; offer.terms = false; offer.from = null; offer.to = null; state.tab = 'rent'; render(true); toast('Место опубликовано'); break;
       case 'signup':
         var n = $('#ac-n').value.trim(), sn = $('#ac-s').value.trim(), po = $('#ac-o').value.trim(), ph = $('#ac-p').value.trim(), em = $('#ac-e').value.trim(), pw = $('#ac-w').value;
         if(!n || !sn || !ph){ toast('Заполните фамилию, имя и телефон'); break; }
         if(!/^\S+@\S+\.\S+$/.test(em)){ toast('Проверьте электронную почту'); break; }
         if(pw.length < 6){ toast('Пароль от 6 знаков'); break; }
-        state.user = {name:n, surname:sn, patr:po, phone:ph, email:em, pid:null, passport:null}; state.gate = ''; render(true); toast('Аккаунт создан. Паспортные данные добавьте позже'); break;
+        state.user = {name:n, surname:sn, patr:po, phone:ph, email:em, pid:null, passport:null, owner:ownCall('take', null)}; state.gate = ''; emit('signup', {user:state.user, password:pw}); render(true); toast('Аккаунт создан. Паспортные данные добавьте позже'); break;
       case 'passport':
         var pid = $('#pp-i').value.trim().toUpperCase(), pn = $('#pp-n').value.trim().toUpperCase();
         if(!/^\d{7}[A-Z]\d{3}[A-Z]{2}\d$/.test(pid)){ toast('Идентификационный номер: 14 символов, например 3010190A001PB1'); break; }
         if(!/^[A-Z]{2}\d{7}$/.test(pn)){ toast('Паспорт: 2 буквы и 7 цифр, например MP1234567'); break; }
-        state.user.pid = pid; state.user.passport = pn.slice(0,2)+'•••'+pn.slice(-2); state.gate = ''; render(true); toast('Данные сохранены'); break;
-      case 'logout': state.user = null; render(true); break;
+        state.user.pid = pid; state.user.passport = pn.slice(0,2)+'•••'+pn.slice(-2); state.gate = ''; emit('passport', {pid:pid, passport:pn}); render(true); toast('Данные сохранены'); break;
+      case 'logout': emit('logout'); state.user = null; state.bookings = []; state.mine = []; render(true); break;
+      case 'authmode': state.authMode = v; render(); break;
+      case 'login':
+        var le = $('#lg-e').value.trim(), lw = $('#lg-w').value;
+        if(!live('auth')){ toast('В демо входа нет: создайте аккаунт заново'); break; }
+        if(!le || !lw){ toast('Введите почту и пароль'); break; }
+        emit('login', {email:le, password:lw}); break;
     }
   });
   document.addEventListener('change', function(e){
@@ -437,4 +467,5 @@ function mapAttachOrPlaceholder(){
 document.addEventListener('DOMContentLoaded', function(){
   document.documentElement.setAttribute('data-theme', state.theme); themeSeg();
   render(true);
+  emit('ready');
 });
