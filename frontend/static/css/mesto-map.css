@@ -1,0 +1,5 @@
+#mapslot { z-index: 0; isolation: isolate; background: var(--land); }
+.leaflet-container { font-family: inherit; background: var(--land); }
+.leaflet-top.leaflet-right { margin-top: 56px; }
+.leaflet-control-attribution { font-size: 10px; background: rgba(255,255,255,.75); }
+:root[data-theme="dark"] .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9); }

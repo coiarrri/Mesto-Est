@@ -17,3 +17,33 @@
 2. Скопировать `templates/mesto_prototype.html` в `templates/`.
 3. В `views.py`: `return render(request, 'mesto_prototype.html')`
 4. Данные из `mesto-data.js` (зоны, места, аренда) заменить запросами к API.
+
+## Бэкенд (Django)
+
+### Запуск
+```
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py import_spots main/data/spots.geojson
+python manage.py seed_fake_data      # ТЕСТОВЫЕ данные (если команда есть)
+python manage.py rebuild_stats
+python manage.py runserver
+```
+Сайт: http://127.0.0.1:8000/
+
+### Модели (main/models.py)
+- ParkingSpot: парковочное место (code, геометрия, текущий статус)
+- SpotObservation: журнал замеров «занято/свободно»
+- SpotHourStat: счётчики по месту, дате, дню недели и часу
+
+### API
+- GET /api/spots/ : все места в GeoJSON со статусом и «обычно свободно, %»
+- POST /api/spots/<code>/status/ : принять {"is_occupied": true/false}
+- GET /api/spots/<code>/heatmap/ : матрица «час × день недели»
+
+### Данные
+- main/data/spots.geojson: места, оцифрованные по спутнику
+- Команды: import_spots (загрузка), rebuild_stats (пересчёт), seed_fake_data (тестовые данные, `--clear` удаляет)
+- db.sqlite3 в Git не хранится: после клонирования выполнить команды из раздела «Запуск»
